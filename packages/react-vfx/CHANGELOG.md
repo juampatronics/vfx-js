@@ -1,5 +1,16 @@
 # react-vfx
 
+## 0.13.0
+
+### Minor Changes
+
+- Posteffect shader etc
+
+### Patch Changes
+
+- Updated dependencies
+  - @vfx-js/core@0.8.0
+
 ## 0.12.0
 
 ### Minor Changes
