@@ -39,6 +39,7 @@ void main() {
 `;
 
 export type ShaderPreset =
+    | "none"
     | "uvGradient"
     | "rainbow"
     | "glitch"
@@ -56,7 +57,11 @@ export type ShaderPreset =
     | "slitScanTransition"
     | "warpTransition"
     | "pixelateTransition"
-    | "focusTransition";
+    | "focusTransition"
+    | "invert"
+    | "grayscale"
+    | "vignette"
+    | "chromatic";
 
 const COMMON_HEADER = `precision highp float;
 uniform vec2 resolution;
@@ -84,6 +89,7 @@ const READ_TEX = `vec4 readTex(sampler2D tex, vec2 uv) {
  * ```
  */
 export const shaders: Record<ShaderPreset, string> = {
+    none: COPY_FRAGMENT_SHADER,
     uvGradient: `
     ${COMMON_HEADER}
     ${READ_TEX}
@@ -665,6 +671,80 @@ export const shaders: Record<ShaderPreset, string> = {
             readTex(src, uv + vec2(-(1. - t), 0)),
             0.5
         ) * intersection;
+    }
+    `,
+    invert: `
+    ${COMMON_HEADER}
+    ${READ_TEX}
+
+    void main() {
+        vec2 uv = (gl_FragCoord.xy - offset) / resolution;
+        vec4 color = readTex(src, uv);
+        outColor = vec4(1.0 - color.rgb, color.a);
+    }
+    `,
+    grayscale: `
+    ${COMMON_HEADER}
+    ${READ_TEX}
+
+    void main() {
+        vec2 uv = (gl_FragCoord.xy - offset) / resolution;
+        vec4 color = readTex(src, uv);
+        float gray = dot(color.rgb, vec3(0.299, 0.587, 0.114));
+        outColor = vec4(vec3(gray), color.a);
+    }
+    `,
+    vignette: `
+    ${COMMON_HEADER}
+    ${READ_TEX}
+
+    uniform float intensity;
+    uniform float radius;
+    uniform float power;
+
+    void main() {
+        vec2 uv = (gl_FragCoord.xy - offset) / resolution;
+        outColor = readTex(src, uv);
+
+        vec2 p = uv * 2.0 - 1.0;
+        p.x *= resolution.x / resolution.y;
+
+        float l = max(length(p) - radius, 0.);
+        outColor *= 1. - pow(l, power) * intensity;
+    }
+    `,
+    chromatic: `
+    ${COMMON_HEADER}
+    ${READ_TEX}
+
+    uniform float intensity;
+    uniform float radius;
+    uniform float power;
+
+
+    vec4 mirrorTex(sampler2D tex, vec2 uv) {
+        vec2 uv2 = 1. - abs(1. - mod(uv, 2.0));
+        return texture(tex, uv2);
+    }
+
+    void main() {
+        vec2 uv = (gl_FragCoord.xy - offset) / resolution;
+
+        vec2 p = uv * 2.0 - 1.0;
+        p.x *= resolution.x / resolution.y;
+
+        float l = max(length(p) - radius, 0.);
+        float d = pow(l, power) * (intensity * 0.1);
+
+        vec2 uvR = (uv - .5) / (1.0 + d * 1.) + 0.5;
+        vec2 uvG = (uv - .5) / (1.0 + d * 2.) + 0.5;
+        vec2 uvB = (uv - .5) / (1.0 + d * 3.) + 0.5;
+
+        vec4 cr = mirrorTex(src, uvR);
+        vec4 cg = mirrorTex(src, uvG);
+        vec4 cb = mirrorTex(src, uvB);
+
+        outColor = vec4(cr.r, cg.g, cb.b, (cr.a + cg.a + cb.a) / 3.0);
     }
     `,
 };
